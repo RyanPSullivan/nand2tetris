@@ -1,0 +1,8 @@
+CHIP Neg16 {
+    IN in[16];
+    OUT out[16];
+
+    PARTS:
+    Xor16(a=in,b[0..15]=true,out=axortrue);
+    Inc16(in=axortrue,out=out);
+}
