@@ -58,14 +58,11 @@ CHIP ALU {
 
    Not16(in=postsetOut,out=notPostsetOut);
 
-   Mux16(a=postsetOut,b=notPostsetOut,sel=no,out=out);
+   Mux16(a=postsetOut,b=notPostsetOut,sel=no,out=out, out[0..7]=outPart1, out[8..15]=outPart2,out[15]=ng);
 
    //Set the output signals
-   //Or8Way(in=tempOut[0..7],out=orOne);
-   //Or8Way(in=tempOut[8..15],out=orTwo);
-   //Or(a=orOne,b=orTwo,out=zr);
-   //And(a=out[15],b=true,out=ng);
-
-
-
+   Or8Way(in=outPart1,out=orOne);
+   Or8Way(in=outPart2,out=orTwo);
+   Or(a=orOne,b=orTwo,out=nonZero);
+   Not(in=nonZero,out=zr);
 }
