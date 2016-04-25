@@ -6,23 +6,23 @@
 /**
  * The Hack CPU (Central Processing unit), consisting of an ALU,
  * two registers named A and D, and a program counter named PC.
- * The CPU is designed to fetch and execute instructions written in 
+ * The CPU is designed to fetch and execute instructions written in
  * the Hack machine language. In particular, functions as follows:
- * Executes the inputted instruction according to the Hack machine 
+ * Executes the inputted instruction according to the Hack machine
  * language specification. The D and A in the language specification
  * refer to CPU-resident registers, while M refers to the external
- * memory location addressed by A, i.e. to Memory[A]. The inM input 
- * holds the value of this location. If the current instruction needs 
- * to write a value to M, the value is placed in outM, the address 
- * of the target location is placed in the addressM output, and the 
- * writeM control bit is asserted. (When writeM==0, any value may 
- * appear in outM). The outM and writeM outputs are combinational: 
- * they are affected instantaneously by the execution of the current 
- * instruction. The addressM and pc outputs are clocked: although they 
- * are affected by the execution of the current instruction, they commit 
- * to their new values only in the next time step. If reset==1 then the 
- * CPU jumps to address 0 (i.e. pc is set to 0 in next time step) rather 
- * than to the address resulting from executing the current instruction. 
+ * memory location addressed by A, i.e. to Memory[A]. The inM input
+ * holds the value of this location. If the current instruction needs
+ * to write a value to M, the value is placed in outM, the address
+ * of the target location is placed in the addressM output, and the
+ * writeM control bit is asserted. (When writeM==0, any value may
+ * appear in outM). The outM and writeM outputs are combinational:
+ * they are affected instantaneously by the execution of the current
+ * instruction. The addressM and pc outputs are clocked: although they
+ * are affected by the execution of the current instruction, they commit
+ * to their new values only in the next time step. If reset==1 then the
+ * CPU jumps to address 0 (i.e. pc is set to 0 in next time step) rather
+ * than to the address resulting from executing the current instruction.
  */
 
 CHIP CPU {
@@ -34,10 +34,69 @@ CHIP CPU {
                          // the current program (reset==0).
 
     OUT outM[16],        // M value output
-        writeM,          // Write to M? 
+        writeM,          // Write to M?
         addressM[15],    // Address in data memory (of M)
         pc[15];          // address of next instruction
 
     PARTS:
     // Put your code here:
+
+    //Mux A Register Input
+    //Selects the input into the A register, this will be either:
+    //- The value currently being output by the ALU, following an address computation
+    //- The instruction currently being read from ROM
+    //a=TODOA: the output from the ALU
+    //b=instruction: the instruction to be executed
+    //load=TODOB: selects the input for the a register
+    //out=aRegisterInput: the input into the a register
+    Mux16(a=TODOA,b=instruction,load=TODOB,out=aRegisterInput);
+
+    //A Register
+    //in=aRegisterInput input to register a is a mux of the instruction or ALU computation
+    //TODOB depends on wether we are in a fetch or execute cycle
+    //aRegisterOutput is fed into both the program counter, in case of a jump and the ALU in case of a computation
+    Register(in=aRegisterInput,load=TODOB,out=aRegisterOutput);
+
+    //D Register
+    //TODOA is the output of the previous ALU computation
+    //TODOB is a control flag
+    //out=aluXInput is fed into the ALU in case of a computation
+    Register(in=TODOA,load=TODOB,out=aluXInput);
+
+    //Program Counter
+    //TODOA is the address from the A register
+    //TODOB load is based on the output from the ALU and jump flags
+    //TODOC inc is based on jump flags
+    PC( in=aRegisterOutput, load=TODOB, inc=TODOC, reset=reset, out[0..14]=pc );
+
+    //Mux ALU Y Input
+    //Selects the correct value to be input into the ALU's y parameter
+    //this will be either the value stored in the A register, or the value stored in the currently addressed piece of
+    //memory
+    //a=aRegisterOut: the value currently stored in the a register
+    //b=inM: value currently addressed in memory
+    //load=TODOA: the control bit which decides which value to feed into the ALU
+    //out=aluYInput: the y input into the ALU
+    Mux16(a=aRegisterOut,b=inM,load=TODOA,out=aluYInput)
+
+    //ALU
+    ALU(x=aluXInput,y=aluYInput,zx=instruction[TODO],nx=instruction[TODO],zy=instruction[TODO],ny=instruction[TODO],f=instruction[TODO],no=instruction[TODO],out=aluOutput,zr=zr,ng=ng);
 }
+
+CHIP ALU {
+
+    IN  // 16-bit inputs:
+        x[16], y[16],
+        // Control bits:
+        zx, // Zero the x input
+        nx, // Negate the x input
+        zy, // Zero the y input
+        ny, // Negate the y input
+        f,  // Function code: 1 for add, 0 for and
+        no; // Negate the out output
+
+        out[16],
+
+        // ALU output flags
+        zr, // 1 if out=0, 0 otherwise
+        ng; // 1 if out<0, 0 otherwise
