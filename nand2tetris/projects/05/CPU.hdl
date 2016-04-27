@@ -41,31 +41,33 @@ CHIP CPU {
     PARTS:
 
     // Put your code here:
-    Not(in=instruction[0],out=instructionIsAddress);
+    Not(in=instruction[15],out=instructionIsAddress);
 
-    Or(a=instructionIsAddress,b=instruction[9],out=storeA);
+
 
     //Mux A Register Input
     //Selects the input into the A register, this will be either:
     //- The value currently being output by the ALU, following an address computation
     //- The instruction currently being read from ROM
-    //a=aluOutput: the output from the ALU
-    //b=instruction: the instruction to be executed
-    //sel=instruction[0]: if the first bit is off then the instruction input is an address
-    //out=aRegisterInput: the input into the a register
+    //a: the output from the ALU
+    //b: the instruction to be executed
+    //sel: the first bit of the incoming instruction as this determines wether we are dealing with an address or instruction
+    //out: the input into the a register
     Mux16(a=aluOutput,b=instruction,sel=instructionIsAddress,out=aRegisterInput);
 
     //A Register
-    //in=aRegisterInput input to register a is a mux of the instruction or ALU computation
-    //TODOB depends on wether we are in a fetch or execute cycle
-    //aRegisterOutput is fed into both the program counter, in case of a jump and the ALU in case of a computation
-    ARegister(in=aRegisterInput,load=storeA,out=aRegisterOutput);
+    //in: input to register a is a mux of the instruction or ALU computation
+    //storeA: if the input is an address we always store, otherwise it depends on the destination bits in the instruction
+    //out: is fed into both the program counter, in case of a jump and the ALU in case of a computation
+    Or(a=instructionIsAddress,b=instruction[5],out=storeA);
+    ARegister(in=aRegisterInput,load=storeA,out=aRegisterOutput, out[0..14]=addressM);
 
     //D Register
-    //in=aluOutput is the output of the previous ALU computation
-    //TODOB is a control flag
-    //out=aluXInput is fed into the ALU in case of a computation
-    DRegister(in=aluOutput,load=instruction[10],out=aluXInput);
+    //in: is the output of the previous ALU computation
+    //load: a value is placed in the d register, if this is an instruction and the destination d bit is set
+    //out: is fed into the ALU in case of a computation
+    And(a=instruction[15],b=instruction[4],out=storeD);
+    DRegister(in=aluOutput,load=storeD,out=aluXInput);
 
     //Program Counter
     //in=aRegisterOutput is the address from the A register
@@ -81,28 +83,32 @@ CHIP CPU {
     //b=inM: value currently addressed in memory
     //sel=TODOA: the control bit which decides which value to feed into the ALU
     //out=aluYInput: the y input into the ALU
-    Mux16(a=aRegisterOutput,b=inM,sel=instructionIsAddress,out=aluYInput);
+    And(a=instruction[15],b=instruction[12],out=selectYInputFromMemory);
+    Mux16(a=aRegisterOutput,b=inM,sel=selectYInputFromMemory,out=aluYInput);
 
     //ALU
-    ALU(x=aluXInput,y=aluYInput,zx=instruction[3],nx=instruction[4],zy=instruction[5],ny=instruction[6],f=instruction[7],no=instruction[8],out=aluOutput,zr=zr,ng=ng);
+    ALU(x=aluXInput,y=aluYInput,zx=instruction[11],nx=instruction[10],zy=instruction[9],ny=instruction[8],f=instruction[7],no=instruction[6],out=aluOutput,out=outM,zr=zr,ng=ng);
 
 
-    //Jump flags
-    //intruction[12] jump if output is negative
-    //instruction[13] jump if output is zero
-    //instruction[14] jump if output is positive
-    And( a=instruction[12],b=ng,out=jumpNegative);
-    And( a=instruction[13],b=zr,out=jumpZero);
+    //Jump
+    //If we are processing an instruction then we check the jump flags otherwise we increment
+    //
+    //intruction[2] jump if output is negative
+    //instruction[1] jump if output is zero
+    //instruction[0] jump if output is positive
+    And( a=instruction[2],b=ng,out=jumpNegative);
+    And( a=instruction[1],b=zr,out=jumpZero);
     Or(a=ng,b=zr,out=notPositive);
     Not(in=notPositive,out=positive);
-    And( a=instruction[14], b=positive, out=jumpPositive);
-    Or8Way(in[0]=jumpNegative,in[1]=jumpZero,in[2]=jumpPositive, out=jump);
+    And( a=instruction[0], b=positive, out=jumpPositive);
+    Or8Way(in[0]=jumpNegative,in[1]=jumpZero,in[2]=jumpPositive, out=jumpFlag);
+
+    And(a=jumpFlag,b=instruction[15],out=jump);
 
     //Incrememnt
-    Or8Way(in[0]=instruction[12], in[1]=instruction[13], in[2]=instruction[14], out=dontInc);
-    Not(in=dontInc,out=inc);
+    Not(in=jump,out=notJump);
+    Or(a=notJump,b=instructionIsAddress,out=inc);
 
-
-    Or(a=false,b=instruction[10],out=writeM);
+    And(a=instruction[15],b=instruction[3],out=writeM);
     //writeM=instruction[10];
 }
